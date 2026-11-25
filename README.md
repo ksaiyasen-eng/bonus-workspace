@@ -63,3 +63,15 @@ VITE_API_URL=http://localhost:5184 npx vite --port 5185
 ```
 
 PIN ทดสอบอยู่ใน `scripts/mock-api.ts` ใช้ได้กับเซิร์ฟเวอร์จำลองเท่านั้น
+
+## ระบบจริง (ขึ้นเมื่อ 2026-11-25)
+
+- เว็บ: https://ksaiyasen-eng.github.io/bonus-workspace/ (GitHub Pages จาก branch `gh-pages` ของ repo `ksaiyasen-eng/bonus-workspace`)
+- ระบบกลาง: ฟังก์ชัน `bonus-workspace` ในโปรเจกต์ Supabase vari-trucks ตั้ง `verify_jwt = false` เพราะฟังก์ชันตรวจ PIN เอง
+- PIN เก็บในตาราง `bonus_pins` เป็นค่า SHA-256 ของ `bonus-workspace:<pin>` เท่านั้น เปลี่ยนได้ในหน้าตั้งค่าด้วย PIN ผู้จัดการ
+- โฟลเดอร์ git อยู่นอก Google Drive ที่ `~/.local/share/bonus-workspace-deps/repo` (คัดลอกจากโฟลเดอร์นี้ก่อน commit)
+
+ขึ้นรุ่นใหม่
+
+1. หน้าเว็บ: `npm test` แล้ว `npm run build` แล้ว push โฟลเดอร์ `dist` (พร้อมไฟล์ `.nojekyll`) ไปที่ branch `gh-pages`
+2. ฟังก์ชันกลาง: deploy ไฟล์ `index.ts` `core.ts` `check.ts` ในโฟลเดอร์ `supabase/functions/bonus-workspace/` (รุ่นที่ขึ้นอยู่ไม่มี `memoryStore` ซึ่งใช้เฉพาะเทสต์)
