@@ -35,7 +35,7 @@ function People({ k, title, unit }: { k: 'staff' | 'customers'; title: string; u
   const [block, setBlock] = useState('') // why a delete was refused; not a typing mistake, so it is not shown as a field error
   const used = (id: string) =>
     k === 'staff'
-      ? s.sales.some((x) => ROLES.some((r) => x.staff[r] === id)) || s.cash.some((x) => x.followId === id) || s.moves.some((x) => x.staffId === id) || s.payouts.some((x) => x.staffId === id)
+      ? s.sales.some((x) => ROLES.some((r) => x.staff[r] === id)) || s.cash.some((x) => x.followId === id) || s.moves.some((x) => x.staffId === id) || s.payouts.some((x) => x.staffId === id) || s.claims.some((x) => x.staffId === id)
       : s.sales.some((x) => x.customerId === id)
   function save(e: FormEvent) {
     e.preventDefault()

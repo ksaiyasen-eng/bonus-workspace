@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { ROLES, fmtDate, kip, num, periodOf, periodRange, today, type Cat, type Role, type Sale } from '../rules.ts'
-import { CAT_LABEL, uid, withCalc, type State } from '../store.ts'
+import { CAT_LABEL, uid, withCalc } from '../store.ts'
 import { Card, Empty, Field, RowActions, SaleStatus, Status, Table, Wait, useApp } from '../ui.tsx'
 import { ROLE_LABEL } from './Sale.tsx'
+import { Claims } from './Claims.tsx'
 
-const TABS = [['water', 'ນ້ຳແພັກ'], ['bag', 'ຖົງຂີ້ເຫຍື້ອ'], ['pending', 'ລໍຖ້າອະນຸມັດ'], ['bills', 'ກວດເລກທີບິນ']] as const
+const TABS = [['water', 'ນ້ຳແພັກ'], ['bag', 'ຖົງຂີ້ເຫຍື້ອ'], ['pending', 'ລໍຖ້າອະນຸມັດ'], ['bills', 'ກວດເລກທີບິນ'], ['claims', 'ຂໍເບີກຄ່າຕອບແທນ']] as const
 
 export function Reports({ tab = 'water' }: { tab?: string }) {
   const { s } = useApp()
@@ -18,7 +19,10 @@ export function Reports({ tab = 'water' }: { tab?: string }) {
     return new Date(Date.UTC(y, m - i, 1)).toISOString().slice(0, 7)
   })
   const pending = s.sales.filter((x) => x.status === 'pending').length
+  const claimsWaiting = s.claims.filter((x) => x.ym === ym && x.status === 'requested').length
   const active = TABS.some(([id]) => id === tab) ? tab : 'water'
+  // on a phone the tab row scrolls sideways; keep the open tab in view
+  useEffect(() => { document.querySelector('.tabs a.on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }, [active])
 
   return (
     <>
@@ -33,19 +37,20 @@ export function Reports({ tab = 'water' }: { tab?: string }) {
       <nav className="tabs" aria-label="ພາກສ່ວນລາຍງານ">
         {TABS.map(([id, label]) => (
           <a key={id} data-ui="tab" href={`#/reports/${id}`} className={id === active ? 'on' : ''} aria-current={id === active ? 'page' : undefined}>
-            {label}{id === 'pending' && pending > 0 ? ` (${pending})` : ''}
+            {label}{id === 'pending' && pending > 0 ? ` (${pending})` : ''}{id === 'claims' && claimsWaiting > 0 ? ` (${claimsWaiting})` : ''}
           </a>
         ))}
       </nav>
-      {(active === 'water' || active === 'bag') && <CatReport cat={active} ym={ym} from={from} to={to} />}
+      {(active === 'water' || active === 'bag') && <CatReport cat={active} from={from} to={to} />}
       {active === 'pending' && <Pending />}
       {active === 'bills' && <Bills from={from} to={to} />}
+      {active === 'claims' && <Claims key={ym} ym={ym} from={from} to={to} />}
     </>
   )
 }
 
-function CatReport({ cat, ym, from, to }: { cat: Cat; ym: string; from: string; to: string }) {
-  const { s, set, toast, role } = useApp()
+function CatReport({ cat, from, to }: { cat: Cat; from: string; to: string }) {
+  const { s } = useApp()
   const inRange = (d: string) => d >= from && d <= to
   const rows = withCalc(s, s.sales.filter((x) => x.cat === cat && x.status === 'approved' && inRange(x.date)))
   const products = s.products.filter((p) => p.cat === cat)
@@ -68,24 +73,6 @@ function CatReport({ cat, ym, from, to }: { cat: Cat; ym: string; from: string; 
   const people = s.staff
     .map((p) => ({ p, v: ROLES.map((r) => rows.reduce((a, x) => a + (x.x.staff[r] === p.id ? x.c.staff[r] : 0), 0)) }))
     .filter((x) => x.v.some((n) => n > 0))
-
-  // payout marks for this period and category. Confirmed by the user 2026-11-25: a mark keeps the amount that was due when it was made
-  const pay = people.map(({ p, v }) => {
-    const mark = s.payouts.find((x) => x.ym === ym && x.cat === cat && x.staffId === p.id)
-    const due = v.reduce((a, n) => a + n, 0)
-    const paid = mark?.amount ?? 0
-    return { p, v, due, paid, owed: due - paid, mark }
-  })
-  const paidAll = pay.reduce((a, x) => a + x.paid, 0)
-  const others = (s: State, id: string) => s.payouts.filter((x) => !(x.ym === ym && x.cat === cat && x.staffId === id))
-  const markPaid = (id: string, name: string, amount: number) => {
-    set((s) => ({ ...s, payouts: [...others(s, id), { id: uid(), ym, cat, staffId: id, amount, date: today() }] }))
-    toast(`ໝາຍວ່າຈ່າຍ ${kip(amount)} ໃຫ້ ${name} ແລ້ວ`)
-  }
-  const unmark = (id: string, name: string) => {
-    set((s) => ({ ...s, payouts: others(s, id) }))
-    toast(`ຍົກເລີກການໝາຍຈ່າຍຂອງ ${name} ແລ້ວ`)
-  }
 
   if (rows.length === 0)
     return (
@@ -127,26 +114,13 @@ function CatReport({ cat, ym, from, to }: { cat: Cat; ym: string; from: string; 
           </dl>
         </Card>
       </div>
-      <Card title="ເງິນພະນັກງານລາຍບຸກຄົນ ແລະ ການຈ່າຍ">
-        <dl className="kv" style={{ marginBottom: 12, maxWidth: 420 }}>
-          <dt>ຕ້ອງຈ່າຍທັງໝົດ</dt><dd>{kip(total.staff)}</dd>
-          <dt>ຈ່າຍແລ້ວ ({pay.filter((x) => x.paid > 0).length} ຄົນ)</dt><dd>{kip(paidAll)}</dd>
-          <dt>ຍັງຄ້າງຈ່າຍ ({pay.filter((x) => x.owed > 0).length} ຄົນ)</dt><dd>{kip(pay.reduce((a, x) => a + Math.max(x.owed, 0), 0))}</dd>
-        </dl>
-        <Table head={['ພະນັກງານ', ...ROLES.map((r) => ROLE_LABEL[r]), 'ລວມ', 'ຈ່າຍແລ້ວ', 'ຍັງຄ້າງຈ່າຍ', 'ສະຖານະ', 'ຈັດການ']}>
-          {pay.map(({ p, v, due, paid, owed, mark }) => (
-            <tr key={p.id}>
-              <td>{p.name}</td>{v.map((n, i) => <td className="n" key={i}>{kip(n)}</td>)}<td className="n"><b>{kip(due)}</b></td>
-              <td className="n">{kip(paid)}</td><td className="n">{kip(owed)}</td>
-              <td>{!mark ? <Status kind="pending">ຍັງຄ້າງຈ່າຍ</Status> : owed === 0 ? <Status kind="ok">ຈ່າຍແລ້ວ {fmtDate(mark.date)}</Status> : owed > 0 ? <Status kind="pending">ຈ່າຍບາງສ່ວນ</Status> : <Status kind="bad">ຈ່າຍເກີນ</Status>}</td>
-              <td><div className="row">
-                {role !== 'manager' && <span className="muted">ສະເພາະຜູ້ຈັດການ</span>}
-                {role === 'manager' && owed !== 0 && <button className="btn btn-sm" onClick={() => markPaid(p.id, p.name, due)}>ໝາຍວ່າຈ່າຍແລ້ວ</button>}
-                {role === 'manager' && mark && <button className="btn btn-sm btn-danger" onClick={() => unmark(p.id, p.name)}>ຍົກເລີກການໝາຍ</button>}
-              </div></td>
-            </tr>
+      <Card title="ເງິນພະນັກງານລາຍບຸກຄົນ" action={<a className="btn" href="#/reports/claims">ຕິດຕາມການຂໍເບີກ</a>}>
+        <Table head={['ພະນັກງານ', ...ROLES.map((r) => ROLE_LABEL[r]), 'ລວມ']}>
+          {people.map(({ p, v }) => (
+            <tr key={p.id}><td>{p.name}</td>{v.map((n, i) => <td className="n" key={i}>{kip(n)}</td>)}<td className="n"><b>{kip(v.reduce((a, n) => a + n, 0))}</b></td></tr>
           ))}
         </Table>
+        <p className="muted" style={{ marginTop: 8 }}>ການຂໍເບີກ ແລະ ການຈ່າຍເງິນ ຕິດຕາມຢູ່ແທັບ ຂໍເບີກຄ່າຕອບແທນ ລວມທັງສອງໝວດ</p>
         <p className="muted" style={{ marginTop: 8 }}>ຄົນດຽວຫຼາຍບົດບາດ: ສະແດງແຍກຕາມບົດບາດ ແລ້ວບວກລວມ ວິທີລວມລໍຖ້າຢືນຢັນ</p>
       </Card>
     </>

@@ -4,8 +4,10 @@ import { check as checkData } from '../supabase/functions/bonus-workspace/check.
 export interface Named { id: string; name: string }
 export interface Cash { id: string; date: string; cat: Cat; followId: string; amount: number }
 export interface Move { id: string; date: string; type: 'out' | 'return' | 'damage'; productId: string; qty: number; note: string; staffId?: string } // staffId: who the goods were issued to or came back from
-/** Marks that a person's commission for one period and category was paid. `amount` is what was due when it was marked. */
+/** Old payout mark, replaced by claims on 2026-11-25. Still read from older saved data and backups, then turned into paid claims. */
 export interface Payout { id: string; ym: string; cat: Cat; staffId: string; amount: number; date: string }
+/** A team member's request to be paid part of their commission for one cutoff period, and whether it was paid. */
+export interface Claim { id: string; ym: string; staffId: string; amount: number; date: string; note: string; status: 'requested' | 'paid' | 'rejected'; decidedAt?: string }
 export interface Cancel { id: string; billNo: string; date: string; cat?: Cat } // cat is missing on entries saved before the field existed
 
 export interface State {
@@ -19,6 +21,7 @@ export interface State {
   moves: Move[]
   cancels: Cancel[]
   payouts: Payout[]
+  claims: Claim[]
   settings: Settings
 }
 
@@ -28,7 +31,7 @@ export const BACKUP_VERSION = 1
 export const emptyState = (): State => ({
   staff: [], customers: [], followIds: [], warehouseIds: [],
   products: structuredClone(DEFAULT_PRODUCTS),
-  sales: [], cash: [], moves: [], cancels: [], payouts: [],
+  sales: [], cash: [], moves: [], cancels: [], payouts: [], claims: [],
   settings: structuredClone(DEFAULT_SETTINGS),
 })
 
@@ -64,6 +67,7 @@ export const withCalc = (s: State, sales: Sale[]) =>
 export const exportJson = (s: State) =>
   JSON.stringify({ app: 'bonus-workspace', version: BACKUP_VERSION, exportedAt: new Date().toISOString(), data: s }, null, 2)
 
+/** Full check. It also turns old payout marks into paid claims (see check.ts). */
 export const check = checkData as (d: any) => State
 
 export function parseBackup(text: string): { state: State } | { error: string } {

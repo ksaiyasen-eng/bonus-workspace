@@ -5,7 +5,7 @@ import type { State } from './store.ts'
 
 type Row = { id: string }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-const LISTS = ['staff', 'customers', 'products', 'sales', 'cash', 'moves', 'cancels', 'payouts'] as const
+const LISTS = ['staff', 'customers', 'products', 'sales', 'cash', 'moves', 'cancels', 'payouts', 'claims'] as const
 
 function mergeList<T extends Row>(base: T[], local: T[], remote: T[]): T[] {
   const was = new Map(base.map((x) => [x.id, x]))
@@ -38,7 +38,7 @@ export function merge3(base: State, local: State, remote: State): State {
   }
   restore('products', [...out.sales.map((x) => x.productId), ...out.moves.map((x) => x.productId)])
   restore('customers', out.sales.map((x) => x.customerId))
-  restore('staff', [...out.sales.flatMap((x) => Object.values(x.staff)), ...out.cash.map((x) => x.followId), ...out.moves.map((x) => x.staffId), ...out.payouts.map((x) => x.staffId)])
+  restore('staff', [...out.sales.flatMap((x) => Object.values(x.staff)), ...out.cash.map((x) => x.followId), ...out.moves.map((x) => x.staffId), ...out.payouts.map((x) => x.staffId), ...out.claims.map((x) => x.staffId)])
   const staffIds = new Set(out.staff.map((x) => x.id))
   out.followIds = out.followIds.filter((id) => staffIds.has(id))
   out.warehouseIds = out.warehouseIds.filter((id) => staffIds.has(id))

@@ -61,18 +61,22 @@ export const stable = (v: any): string =>
 /** Returns the first problem in the data (a Lao message), or null when it is sound. */
 const problemIn = (d: any): string | null => { try { check(d); return null } catch (e) { return e instanceof Error ? e.message : 'bad data' } }
 
-// What only a manager may change: rules, prices, the staff list and its roles, payout marks, cancelled-bill records,
-// and any bill that is not waiting for approval.
+// What only a manager may change: rules, prices, the staff list and its roles, old payout marks, cancelled-bill records,
+// any bill that is not waiting for approval, and any pay claim that is not waiting to be paid.
 const MANAGER_ONLY = ['settings', 'products', 'payouts', 'cancels', 'staff', 'followIds', 'warehouseIds']
+// list -> the status staff may still add, change or remove; rows in any other status are the manager's
+const OPEN_STATUS: Record<string, string> = { sales: 'pending', claims: 'requested' }
 
 /** Returns the part a staff save may not touch, or null when the save is allowed. */
 export function staffBlock(old: any, next: any): string | null {
   if (!old) return 'first-save'
-  for (const k of MANAGER_ONLY) if (stable(old[k]) !== stable(next[k])) return k
-  const before = new Map<string, any>(old.sales.map((x: any) => [x.id, x]))
-  const after = new Map<string, any>(next.sales.map((x: any) => [x.id, x]))
-  for (const [id, x] of before) if (x.status !== 'pending' && stable(after.get(id)) !== stable(x)) return 'sales'
-  for (const [id, x] of after) if (x.status !== 'pending' && stable(before.get(id)) !== stable(x)) return 'sales'
+  for (const k of MANAGER_ONLY) if (stable(old[k] ?? []) !== stable(next[k] ?? [])) return k
+  for (const [k, open] of Object.entries(OPEN_STATUS)) {
+    const before = new Map<string, any>((old[k] ?? []).map((x: any) => [x.id, x]))
+    const after = new Map<string, any>((next[k] ?? []).map((x: any) => [x.id, x]))
+    for (const [id, x] of before) if (x.status !== open && stable(after.get(id)) !== stable(x)) return k
+    for (const [id, x] of after) if (x.status !== open && stable(before.get(id)) !== stable(x)) return k
+  }
   return null
 }
 
@@ -102,7 +106,8 @@ export async function handle(req: Req, ip: string, store: Store, now = Date.now(
     const cur = await current()
     if (cur.version !== req.baseVersion) return { status: 409, body: cur }
     if (role === 'staff') {
-      const part = staffBlock(cur.data, req.data)
+      // the stored copy goes through the same check, so old payout marks compare as the paid claims the new data holds
+      const part = staffBlock(cur.data && check(structuredClone(cur.data)), req.data)
       if (part) return { status: 403, body: { error: 'forbidden', part } }
     }
     if (!(await store.write(req.data, cur.version, role))) return { status: 409, body: await current() }

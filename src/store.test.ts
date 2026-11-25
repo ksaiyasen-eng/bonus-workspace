@@ -53,3 +53,21 @@ test('a payout or stock issue for an unknown person is refused', () => {
   assert.ok('error' in backup((s) => { s.moves[0].staffId = 'gone' }))
   assert.ok('state' in backup((s) => { s.moves[0].staffId = 'a' }))
 })
+
+test('old payout marks become paid claims when data is loaded or imported', () => {
+  const old = JSON.parse(exportJson(good()))
+  delete old.data.claims
+  old.data.payouts = [{ id: 'p1', ym: '2026-12', cat: 'water', staffId: 'a', amount: 15000, date: '2026-12-31' }]
+  const r = parseBackup(JSON.stringify(old))
+  assert.ok('state' in r)
+  assert.deepEqual(r.state.payouts, [])
+  assert.deepEqual(r.state.claims.map((c) => [c.id, c.staffId, c.amount, c.status, c.decidedAt]), [['p1', 'a', 15000, 'paid', '2026-12-31']])
+})
+
+test('a claim for an unknown person or with no amount is refused', () => {
+  const c = { id: 'k', ym: '2026-12', staffId: 'a', amount: 100, date: '2026-11-25', note: '', status: 'requested' as const }
+  assert.ok('state' in backup((s) => { s.claims = [c] }))
+  assert.ok('error' in backup((s) => { s.claims = [{ ...c, staffId: 'gone' }] }))
+  assert.ok('error' in backup((s) => { s.claims = [{ ...c, amount: 0 }] }))
+  assert.ok('error' in backup((s) => { s.claims = [c, { ...c }] }))
+})

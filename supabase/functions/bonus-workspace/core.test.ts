@@ -8,6 +8,7 @@ const data = () => ({
   products: [{ id: 'p', name: 'P', cat: 'water', cost: 1, minProfit: 0, recommended: 2, ceiling: null, firstTier: null }],
   sales: [sale('1', 'approved'), sale('2', 'pending')],
   cash: [], moves: [], cancels: [], payouts: [] as { id: string; ym: string; cat: string; staffId: string; amount: number; date: string }[],
+  claims: [{ id: 'k1', ym: '2026-12', staffId: 'a', amount: 1000, date: '2026-11-25', note: '', status: 'paid' }, { id: 'k2', ym: '2026-12', staffId: 'a', amount: 500, date: '2026-11-25', note: '', status: 'requested' }] as { id: string; ym: string; staffId: string; amount: number; date: string; note: string; status: string }[],
   settings: { base: 3000, fuel: 2000, overSharePct: 0, tier2From: 10, tier3From: 100, cutoffDay: 20, pct: { transport: 50, onsite: 25, follow: 10, warehouse: 15 } },
 })
 const setup = async () => {
@@ -81,12 +82,35 @@ test('staff may record, but not approve, change rules or prices, or touch decide
   assert.equal(await tryStaff((d) => { d.sales[0].qty = 9 }), 403) // edit an approved bill
   assert.equal(await tryStaff((d) => { d.sales.shift() }), 403) // delete an approved bill
   assert.equal(await tryStaff((d) => { d.sales.push(sale('3', 'approved')) }), 403)
+  // pay claims: staff may ask and withdraw while waiting; paying, rejecting and paid claims are the manager's
+  const claim = (id: string, status: string, amount = 100) => ({ id, ym: '2026-12', staffId: 'a', amount, date: '2026-11-25', note: '', status })
+  assert.equal(await tryStaff((d) => { d.claims[1].status = 'paid' }), 403) // mark own claim paid
+  assert.equal(await tryStaff((d) => { d.claims[0].amount = 9999 }), 403) // change a paid claim
+  assert.equal(await tryStaff((d) => { d.claims.shift() }), 403) // delete a paid claim
+  assert.equal(await tryStaff((d) => { d.claims.push(claim('k3', 'paid')) }), 403) // add a claim already paid
+  assert.equal(await tryStaff((d) => { d.claims.push(claim('k3', 'requested')); d.claims[1].amount = 600 }), 200)
+  assert.equal(await tryStaff((d) => { d.claims = d.claims.filter((c) => c.id === 'k1') }), 200) // withdraw waiting claims
+  assert.equal(await tryStaff((d) => { d.claims.push(claim('k4', 'requested', 0)) }), 400) // zero amount fails the data check
   // the same id twice must not hide a forged approved bill behind a harmless one
   assert.equal(await tryStaff((d) => { d.sales.unshift(sale('1', 'approved', 999)) }), 400)
   assert.equal(await tryStaff((d) => { d.sales.push(sale('3', 'approved'), sale('3', 'pending')) }), 400)
   // data that would fail the full check on every device is refused, not stored
   assert.equal(await tryStaff((d) => { d.sales.push({ ...sale('3', 'pending'), productId: 'gone' }) }), 400)
   assert.equal(await tryStaff((d) => { d.sales.push(sale('3', 'pending')); d.sales[1].qty = 5; d.customers.push({ id: 'c', name: 'C' }) }), 200)
+})
+
+test('stored data with old payout marks: a staff save is not refused because of the conversion', async () => {
+  const { store, manager, staff } = await setup()
+  await handle({ action: 'save', token: manager, data: data(), baseVersion: 0 }, 'ip', store)
+  store.row!.data.payouts = [{ id: 'old1', ym: '2026-12', cat: 'water', staffId: 'a', amount: 3000, date: '2026-12-01' }] // as an old page left it
+  const d = data()
+  d.claims.push({ id: 'old1', ym: '2026-12', staffId: 'a', amount: 3000, date: '2026-12-01', note: 'ຍ້າຍມາຈາກການໝາຍຈ່າຍເດີມ', status: 'paid', decidedAt: '2026-12-01' } as never)
+  d.sales.push(sale('9', 'pending'))
+  assert.equal((await handle({ action: 'save', token: staff, data: d, baseVersion: 1 }, 'ip', store)).status, 200)
+  // and a staff save that silently drops the converted paid claim is still refused
+  const drop = data(); drop.sales.push(sale('10', 'pending'))
+  store.row!.data.payouts = [{ id: 'old2', ym: '2026-12', cat: 'water', staffId: 'a', amount: 1, date: '2026-12-01' }]
+  assert.equal((await handle({ action: 'save', token: staff, data: drop, baseVersion: 2 }, 'ip', store)).status, 403)
 })
 
 test('key order from the database does not look like a change', () => {

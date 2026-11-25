@@ -11,8 +11,17 @@ export function check(d: any): any {
   if (!d || typeof d !== 'object') fail('ບໍ່ພົບຂໍ້ມູນໃນໄຟລ໌')
   d.payouts ??= [] // added later: older saved data and backups do not have it
   if (!Array.isArray(d.payouts)) fail('ລາຍການຈ່າຍຄ່າຕອບແທນບໍ່ຖືກຮູບແບບ')
+  d.claims ??= [] // added 2026-11-25
+  if (!Array.isArray(d.claims)) fail('ລາຍການຂໍເບີກບໍ່ຖືກຮູບແບບ')
   for (const k of ['staff', 'customers', 'followIds', 'warehouseIds', 'products', 'sales', 'cash', 'moves', 'cancels'])
     if (!Array.isArray(d[k])) fail(`ຂາດລາຍການ "${k}"`)
+  // Old per-category payout marks (before 2026-11-25) become paid claims, so all payment tracking lives in one list.
+  // Done here, not only in the app, so the server compares old and new data in the same form and staff saves are not refused.
+  if (d.payouts.length) {
+    for (const p of d.payouts) if (!isStr(p?.id) || !isStr(p?.ym) || !isStr(p?.staffId) || !isNum(p?.amount) || !/^\d{4}-\d\d-\d\d$/.test(p?.date)) fail('ລາຍການຈ່າຍຄ່າຕອບແທນເດີມມີແຖວທີ່ບໍ່ຄົບ')
+    d.claims = [...d.claims, ...d.payouts.map((p: any) => ({ id: p.id, ym: p.ym, staffId: p.staffId, amount: p.amount, date: p.date, note: 'ຍ້າຍມາຈາກການໝາຍຈ່າຍເດີມ', status: 'paid', decidedAt: p.date }))]
+    d.payouts = []
+  }
   for (const k of ['staff', 'customers'])
     for (const x of d[k]) if (!isStr(x?.id) || !isStr(x?.name)) fail(`ລາຍຊື່ "${k}" ມີແຖວທີ່ບໍ່ຄົບ`)
   for (const p of d.products) {
@@ -30,7 +39,7 @@ export function check(d: any): any {
   for (const x of d.cancels) if (!isStr(x?.billNo) || !isStr(x?.date)) fail('ລາຍການບິນຍົກເລີກມີແຖວທີ່ບໍ່ຄົບ')
 
   // two rows with one id would let a permission check look at one row while the app counts the other
-  for (const k of ['staff', 'customers', 'products', 'sales', 'cash', 'moves', 'cancels', 'payouts']) {
+  for (const k of ['staff', 'customers', 'products', 'sales', 'cash', 'moves', 'cancels', 'payouts', 'claims']) {
     const ids = d[k].map((x: any) => x?.id)
     if (ids.some((id: unknown) => !isStr(id) || !id) || new Set(ids).size !== ids.length) fail(`ລາຍການ "${k}" ມີລະຫັດຊ້ຳ ຫຼື ຂາດລະຫັດ`)
   }
@@ -50,6 +59,11 @@ export function check(d: any): any {
   for (const x of d.cash) if (!staffIds.has(x.followId) || !['water', 'bag'].includes(x.cat)) fail('ລາຍການເງິນສົດອ້າງເຖິງຜູ້ຕິດຕາມ ຫຼື ໝວດທີ່ບໍ່ມີ')
   for (const x of d.moves) if (!productCat.has(x.productId) || (x.staffId && !staffIds.has(x.staffId))) fail('ລາຍການສະຕັອກອ້າງເຖິງສິນຄ້າ ຫຼື ພະນັກງານທີ່ບໍ່ມີໃນລາຍການ')
   for (const x of d.payouts) if (!isStr(x?.ym) || !isNum(x?.amount) || !staffIds.has(x?.staffId)) fail('ລາຍການຈ່າຍຄ່າຕອບແທນມີແຖວທີ່ບໍ່ຄົບ ຫຼື ອ້າງເຖິງພະນັກງານທີ່ບໍ່ມີ')
+
+  for (const x of d.claims)
+    if (!isStr(x?.ym) || !/^\d{4}-\d\d-\d\d$/.test(x?.date) || !isNum(x?.amount) || x.amount <= 0 || !isStr(x?.note)
+      || !['requested', 'paid', 'rejected'].includes(x?.status) || !staffIds.has(x?.staffId))
+      fail('ລາຍການຂໍເບີກມີແຖວທີ່ບໍ່ຄົບ ຫຼື ອ້າງເຖິງພະນັກງານທີ່ບໍ່ມີ')
 
   const st = d.settings
   if (!st || !st.pct) fail('ຂາດການຕັ້ງຄ່າກະຕິກາ')
