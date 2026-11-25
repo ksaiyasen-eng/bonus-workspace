@@ -76,6 +76,7 @@ test('staff may record, but not approve, change rules or prices, or touch decide
   assert.equal(await tryStaff((d) => { d.products[0].cost = 2 }), 403)
   assert.equal(await tryStaff((d) => { d.payouts.push({ id: 'x', ym: '2026-12', cat: 'water', staffId: 'a', amount: 1, date: '2026-12-01' }) }), 403)
   assert.equal(await tryStaff((d) => { d.staff.push({ id: 'b', name: 'B' }) }), 403)
+  assert.equal(await tryStaff((d) => { (d.cancels as unknown[]).push({ id: 'x', billNo: 'W-1', date: '2026-11-25', cat: 'water' }) }), 403) // cancelled-bill records are the manager's
   assert.equal(await tryStaff((d) => { d.sales[1].status = 'approved' }), 403) // approve
   assert.equal(await tryStaff((d) => { d.sales[0].qty = 9 }), 403) // edit an approved bill
   assert.equal(await tryStaff((d) => { d.sales.shift() }), 403) // delete an approved bill

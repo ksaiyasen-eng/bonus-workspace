@@ -61,8 +61,9 @@ export const stable = (v: any): string =>
 /** Returns the first problem in the data (a Lao message), or null when it is sound. */
 const problemIn = (d: any): string | null => { try { check(d); return null } catch (e) { return e instanceof Error ? e.message : 'bad data' } }
 
-// What only a manager may change: rules, prices, the staff list and its roles, payout marks, and any bill that is not waiting for approval.
-const MANAGER_ONLY = ['settings', 'products', 'payouts', 'staff', 'followIds', 'warehouseIds']
+// What only a manager may change: rules, prices, the staff list and its roles, payout marks, cancelled-bill records,
+// and any bill that is not waiting for approval.
+const MANAGER_ONLY = ['settings', 'products', 'payouts', 'cancels', 'staff', 'followIds', 'warehouseIds']
 
 /** Returns the part a staff save may not touch, or null when the save is allowed. */
 export function staffBlock(old: any, next: any): string | null {

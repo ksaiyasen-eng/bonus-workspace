@@ -188,7 +188,8 @@ function Pending() {
 }
 
 function Bills({ from, to }: { from: string; to: string }) {
-  const { s, set, toast } = useApp()
+  const { s, set, toast, role } = useApp()
+  const manager = role === 'manager' // confirmed by the user 2026-11-25: only the manager records or removes cancelled bills
   const [f, setF] = useState({ billNo: '', date: today(), cat: 'water' as Cat })
   const [tried, setTried] = useState(false)
   const list = s.sales.filter((x) => x.date >= from && x.date <= to).sort((a, b) => a.billNo.localeCompare(b.billNo, undefined, { numeric: true }))
@@ -232,6 +233,8 @@ function Bills({ from, to }: { from: string; to: string }) {
       </Card>
       <Card title="ບັນທຶກບິນຍົກເລີກ">
         <p className="note" style={{ marginBottom: 12 }}>ບັນທຶກໄວ້ເພື່ອກວດສອບ ຜົນຕໍ່ຍອດຂາຍ ແລະ ຄ່າຕອບແທນລໍຖ້າຢືນຢັນກະຕິກາ ຈຶ່ງຍັງບໍ່ປ່ຽນຕົວເລກໃນລາຍງານ</p>
+        {!manager && <p className="note" style={{ marginBottom: 12 }}>ການບັນທຶກ ແລະ ລຶບບິນຍົກເລີກ ເຮັດໄດ້ສະເພາະຜູ້ຈັດການ</p>}
+        <fieldset className="gate" disabled={!manager}>
         <form className="form" data-ui="content" onSubmit={submit} noValidate>
           <Field label="ເລກທີບິນ" error={err.billNo}><input value={f.billNo} onChange={(e) => setF({ ...f, billNo: e.target.value })} autoComplete="off" /></Field>
           <Field label="ວັນທີ" error={err.date}><input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} /></Field>
@@ -242,13 +245,14 @@ function Bills({ from, to }: { from: string; to: string }) {
           </Field>
           <div className="form-foot"><button className="btn" type="submit">ບັນທຶກບິນຍົກເລີກ</button></div>
         </form>
+        </fieldset>
         {s.cancels.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <Table head={['ເລກທີບິນຍົກເລີກ', 'ວັນທີ', 'ໝວດ', 'ຈັດການ']}>
               {s.cancels.map((c) => (
                 <tr key={c.id}>
                   <td>{c.billNo}</td><td>{fmtDate(c.date)}</td><td>{c.cat ? CAT_LABEL[c.cat] : '—'}</td>
-                  <td><RowActions what="ລາຍການ" onDelete={() => { set((s) => ({ ...s, cancels: s.cancels.filter((y) => y.id !== c.id) })); toast(`ລຶບບັນທຶກຍົກເລີກບິນ ${c.billNo} ແລ້ວ`) }} /></td>
+                  <td>{manager ? <RowActions what="ລາຍການ" onDelete={() => { set((s) => ({ ...s, cancels: s.cancels.filter((y) => y.id !== c.id) })); toast(`ລຶບບັນທຶກຍົກເລີກບິນ ${c.billNo} ແລ້ວ`) }} /> : <span className="muted">ສະເພາະຜູ້ຈັດການ</span>}</td>
                 </tr>
               ))}
             </Table>
