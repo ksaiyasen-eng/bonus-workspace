@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { fmtDate, num, today } from '../rules.ts'
-import { nameOf, uid, type Move } from '../store.ts'
+import { isCancelled, nameOf, uid, type Move } from '../store.ts'
 import { Card, Empty, Field, RowActions, Status, Table, focusForm, useApp } from '../ui.tsx'
 
 export const MOVE_LABEL: Record<Move['type'], string> = { out: 'ເບີກ', return: 'ສົ່ງຄືນ', damage: 'ເສຍຫາຍ' }
@@ -15,7 +15,7 @@ export function StockPage() {
 
   const rows = s.products.map((p) => {
     const mv = (t: Move['type']) => s.moves.reduce((a, m) => a + (m.productId === p.id && m.type === t ? m.qty : 0), 0)
-    const sold = s.sales.reduce((a, x) => a + (x.productId === p.id && x.status !== 'rejected' ? x.qty : 0), 0)
+    const sold = s.sales.reduce((a, x) => a + (x.productId === p.id && x.status !== 'rejected' && !isCancelled(s, x) ? x.qty : 0), 0)
     const out = mv('out'), ret = mv('return'), dmg = mv('damage')
     return { p, out, sold, ret, dmg, left: out - sold - ret - dmg }
   })
@@ -23,7 +23,7 @@ export function StockPage() {
   const negative = rows.filter((r) => r.left < 0)
 
   // Per delivery person and product: what was issued, sold, returned, damaged, and what is still with them.
-  // Confirmed by the user 2026-11-25: "sold" = bills where the person is the transport staff, rejected bills left out;
+  // Confirmed by the user 2026-11-25: "sold" = bills where the person is the transport staff, rejected and cancelled bills left out;
   // still held = issued - sold - returned - damaged.
   const held = new Map<string, { staffId: string; productId: string; out: number; sold: number; return: number; damage: number }>()
   const cell = (staffId: string, productId: string) => {
@@ -32,7 +32,7 @@ export function StockPage() {
     return held.get(k)!
   }
   for (const m of s.moves) cell(m.staffId ?? '', m.productId)[m.type] += m.qty
-  for (const x of s.sales) if (x.status !== 'rejected') cell(x.staff.transport, x.productId).sold += x.qty
+  for (const x of s.sales) if (x.status !== 'rejected' && !isCancelled(s, x)) cell(x.staff.transport, x.productId).sold += x.qty
   const byPerson = [...held.values()]
     .map((r) => ({ ...r, left: r.out - r.sold - r.return - r.damage, who: r.staffId ? nameOf(s.staff, r.staffId) : NOBODY }))
     .sort((a, b) => a.who.localeCompare(b.who) || productName(a.productId).localeCompare(productName(b.productId)))
@@ -122,7 +122,7 @@ export function StockPage() {
                 </tr>
               ))}
             </Table>
-            <p className="muted" style={{ marginTop: 8 }}>ຍັງຄ້າງ = ເບີກ − ຂາຍ − ຄືນ − ເສຍ · ຂາຍ = ບິນທີ່ຄົນນັ້ນເປັນພະນັກງານຂົນສົ່ງ ຍົກເວັ້ນບິນທີ່ຖືກປະຕິເສດ</p>
+            <p className="muted" style={{ marginTop: 8 }}>ຍັງຄ້າງ = ເບີກ − ຂາຍ − ຄືນ − ເສຍ · ຂາຍ = ບິນທີ່ຄົນນັ້ນເປັນພະນັກງານຂົນສົ່ງ ຍົກເວັ້ນບິນທີ່ຖືກປະຕິເສດ ແລະ ບິນຍົກເລີກ</p>
           </>
         )}
       </Card>
@@ -135,7 +135,7 @@ export function StockPage() {
             </tr>
           ))}
         </Table>
-        <p className="muted" style={{ marginTop: 8 }}>ຄົງເຫຼືອ = ເບີກ − ຂາຍ − ຄືນ − ເສຍ · ຂາຍ = ທຸກບິນ ຍົກເວັ້ນບິນທີ່ຖືກປະຕິເສດ</p>
+        <p className="muted" style={{ marginTop: 8 }}>ຄົງເຫຼືອ = ເບີກ − ຂາຍ − ຄືນ − ເສຍ · ຂາຍ = ທຸກບິນ ຍົກເວັ້ນບິນທີ່ຖືກປະຕິເສດ ແລະ ບິນຍົກເລີກ</p>
       </Card>
       <Card title="ລາຍການເຄື່ອນໄຫວ">
         {list.length === 0 ? <Empty text="ຍັງບໍ່ມີລາຍການເຄື່ອນໄຫວ" action="ເລີ່ມບັນທຶກ" onClick={focusForm} /> : (

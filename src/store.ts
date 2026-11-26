@@ -6,7 +6,7 @@ export interface Cash { id: string; date: string; cat: Cat; followId: string; am
 export interface Move { id: string; date: string; type: 'out' | 'return' | 'damage'; productId: string; qty: number; note: string; staffId?: string } // staffId: who the goods were issued to or came back from
 /** Old payout mark, replaced by claims on 2026-11-25. Still read from older saved data and backups, then turned into paid claims. */
 export interface Payout { id: string; ym: string; cat: Cat; staffId: string; amount: number; date: string }
-/** A team member's request to be paid part of their commission for one cutoff period, and whether it was paid. */
+/** A team member's request to be paid part of their commission for one calendar-month period, and whether it was paid. */
 export interface Claim { id: string; ym: string; staffId: string; amount: number; date: string; note: string; status: 'requested' | 'paid' | 'rejected'; decidedAt?: string }
 export interface Cancel { id: string; billNo: string; date: string; cat?: Cat } // cat is missing on entries saved before the field existed
 
@@ -56,7 +56,10 @@ export const uid = () => crypto.randomUUID()
 export const nameOf = (list: Named[], id: string) => list.find((x) => x.id === id)?.name ?? '—'
 export const CAT_LABEL: Record<Cat, string> = { water: 'ນ້ຳແພັກ', bag: 'ຖົງຂີ້ເຫຍື້ອ' }
 
-export const withCalc = (s: State, sales: Sale[]) =>
+/** Confirmed 2026-11-26: a cancelled bill counts for no sales, commission or stock out, and stays listed in the bill check. A cancel without a category (older entries) matches both. */
+export const isCancelled = (s: State, x: Sale) => s.cancels.some((c) => c.billNo === x.billNo && (!c.cat || c.cat === x.cat))
+
+export const withCalc =(s: State, sales: Sale[]) =>
   sales.flatMap((x) => {
     const p = s.products.find((p) => p.id === x.productId)
     return p ? [{ x, p, c: saleCalc(x, p, s.settings) }] : []

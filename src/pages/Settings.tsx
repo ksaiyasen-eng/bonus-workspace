@@ -187,14 +187,14 @@ function Rules() {
   const { s, set, toast } = useApp()
   const st = s.settings
   const [d, setD] = useState({
-    base: String(st.base), fuel: String(st.fuel), overSharePct: String(st.overSharePct), tier2From: String(st.tier2From), tier3From: String(st.tier3From),
-    cutoffDay: String(st.cutoffDay), transport: String(st.pct.transport), onsite: String(st.pct.onsite), follow: String(st.pct.follow), warehouse: String(st.pct.warehouse),
+    base: String(st.base), fuel: String(st.fuel), tier2From: String(st.tier2From), tier3From: String(st.tier3From),
+    transport: String(st.pct.transport), onsite: String(st.pct.onsite), follow: String(st.pct.follow), warehouse: String(st.pct.warehouse),
     emptyRole: st.emptyRole, approver: st.approver, approvalOn: st.approvalOn,
   })
   const [tried, setTried] = useState(false)
   const n = (k: keyof typeof d) => Number(d[k])
   const pctSum = ROLES.reduce((a, r) => a + n(r), 0)
-  const inp = (k: 'base' | 'fuel' | 'overSharePct' | 'tier2From' | 'tier3From' | 'cutoffDay' | 'transport' | 'onsite' | 'follow' | 'warehouse') => (
+  const inp = (k: 'base' | 'fuel' | 'tier2From' | 'tier3From' | 'transport' | 'onsite' | 'follow' | 'warehouse') => (
     <input type="number" inputMode="numeric" min={0} data-ui="skip" value={d[k]} onChange={(e) => setD({ ...d, [k]: e.target.value })} />
   )
 
@@ -203,11 +203,9 @@ function Rules() {
   const ok = (k: keyof typeof d) => d[k] !== '' && n(k) >= 0
   if (!ok('base')) er.base = 'ໃສ່ຕົວເລກ 0 ຂຶ້ນໄປ'
   if (!ok('fuel')) er.fuel = 'ໃສ່ຕົວເລກ 0 ຂຶ້ນໄປ'
-  if (!ok('overSharePct') || n('overSharePct') > 100) er.overSharePct = 'ໃສ່ເປີເຊັນລະຫວ່າງ 0 ຫາ 100'
   if (ROLES.some((r) => !ok(r)) || pctSum !== 100) er.pct = `ເປີເຊັນລວມຕ້ອງເທົ່າ 100% ຕອນນີ້ລວມໄດ້ ${pctSum}% ປັບໃຫ້ຄົບ 100`
   if (!Number.isInteger(n('tier2From')) || n('tier2From') < 2) er.tier2From = 'ຂັ້ນທີ 2 ຕ້ອງເລີ່ມທີ່ 2 ແພັກຂຶ້ນໄປ'
   if (!Number.isInteger(n('tier3From')) || n('tier3From') <= n('tier2From')) er.tier3From = 'ຂັ້ນທີ 3 ຕ້ອງຫຼາຍກວ່າຈຸດເລີ່ມຂັ້ນທີ 2'
-  if (!Number.isInteger(n('cutoffDay')) || n('cutoffDay') < 1 || n('cutoffDay') > 28) er.cutoffDay = 'ວັນຕັດຍອດຕ້ອງຢູ່ລະຫວ່າງ 1 ຫາ 28'
   if (d.approvalOn && !d.approver.trim()) er.approver = 'ໃສ່ຊື່ຜູ້ອະນຸມັດກ່ອນເປີດໃຊ້ການອະນຸມັດ'
   const err = tried ? er : {}
 
@@ -216,7 +214,8 @@ function Rules() {
     setTried(true)
     if (Object.keys(er).length) return
     const next: Settings = {
-      base: n('base'), fuel: n('fuel'), overSharePct: n('overSharePct'), tier2From: n('tier2From'), tier3From: n('tier3From'), cutoffDay: n('cutoffDay'),
+      ...st, // overSharePct and cutoffDay are no longer used (rules confirmed 2026-11-26) but stay in stored data
+      base: n('base'), fuel: n('fuel'), tier2From: n('tier2From'), tier3From: n('tier3From'),
       pct: { transport: n('transport'), onsite: n('onsite'), follow: n('follow'), warehouse: n('warehouse') },
       emptyRole: d.emptyRole, approver: d.approver.trim(), approvalOn: d.approvalOn,
     }
@@ -241,10 +240,8 @@ function Rules() {
             <option value="transport">ຍ້າຍໄປໃຫ້ຂົນສົ່ງ</option><option value="company">ເຂົ້າບໍລິສັດ</option>
           </select>
         </Field>
-        <Field label="ສ່ວນແບ່ງພະນັກງານຈາກຍອດຂາຍເກີນລາຄາແນະນຳ (%)" error={err.overSharePct} hint="ເກັບຄ່າໄວ້ ວິທີຄິດລໍຖ້າຢືນຢັນ ຍັງບໍ່ນຳໄປຄິດໄລ່">{inp('overSharePct')}</Field>
         <Field label="ຂັ້ນທີ 2 ເລີ່ມທີ່ (ແພັກ)" error={err.tier2From}>{inp('tier2From')}</Field>
         <Field label="ຂັ້ນທີ 3 ເລີ່ມທີ່ (ແພັກ)" error={err.tier3From}>{inp('tier3From')}</Field>
-        <Field label="ວັນຕັດຍອດຂອງເດືອນ" error={err.cutoffDay} hint="ຈ່າຍທ້າຍເດືອນ">{inp('cutoffDay')}</Field>
         <Field label="ຊື່ຜູ້ອະນຸມັດ" error={err.approver} hint="ໃສ່ພາຍຫຼັງໄດ້">
           <input value={d.approver} onChange={(e) => setD({ ...d, approver: e.target.value })} autoComplete="off" />
         </Field>

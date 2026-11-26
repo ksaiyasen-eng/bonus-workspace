@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { ROLES, fmtDate, kip, minPrice, num, splitBase, tierIndex, tierPrices, today, type Cat, type Role, type Sale } from '../rules.ts'
-import { CAT_LABEL, nameOf, uid, withCalc } from '../store.ts'
-import { Card, DateNav, Empty, Field, RowActions, SaleStatus, Table, focusForm, useApp } from '../ui.tsx'
+import { CAT_LABEL, isCancelled, nameOf, uid, withCalc } from '../store.ts'
+import { Card, DateNav, Empty, Field, RowActions, SaleStatus, Status, Table, focusForm, useApp } from '../ui.tsx'
 
 export const ROLE_LABEL: Record<Role, string> = { transport: 'ຂົນສົ່ງ', onsite: 'ຂາຍໜ້າງານ', follow: 'ຕິດຕາມ', warehouse: 'ນາຍສາງ' }
 const NO_STAFF = { transport: '', onsite: '', follow: '', warehouse: '' }
@@ -144,7 +144,7 @@ export function SalePage({ cat }: { cat: Cat }) {
           <Table head={['ເລກທີບິນ', 'ລູກຄ້າ', 'ສິນຄ້າ', 'ຈຳນວນ', 'ລາຄາ', 'ລວມ', 'ຂົນສົ່ງ', 'ສະຖານະ', 'ຈັດການ']}>
             {rows.map(({ x, p, c }) => (
               <tr key={x.id} className={x.id === editId ? 'hl' : ''}>
-                <td>{x.billNo}</td><td>{nameOf(s.customers, x.customerId)}</td><td>{p.name}</td>
+                <td>{x.billNo}{isCancelled(s, x) && <> <Status kind="bad">ຍົກເລີກ</Status></>}</td><td>{nameOf(s.customers, x.customerId)}</td><td>{p.name}</td>
                 <td className="n">{num(x.qty)}</td><td className="n">{kip(x.price)}</td><td className="n">{kip(c.revenue)}</td>
                 <td>{nameOf(s.staff, x.staff.transport)}</td><td><SaleStatus status={x.status} /></td>
                 <td>{role === 'manager' || x.status === 'pending' ? <RowActions what="ບິນ" onEdit={() => startEdit(x)} onDelete={() => remove(x)} /> : <span className="muted">ສະເພາະຜູ້ຈັດການ</span>}</td>

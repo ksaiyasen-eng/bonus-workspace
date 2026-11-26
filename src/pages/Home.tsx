@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { kip, num, periodOf, periodRange, fmtDate, today } from '../rules.ts'
-import { CAT_LABEL, nameOf, withCalc } from '../store.ts'
+import { CAT_LABEL, isCancelled, nameOf, withCalc } from '../store.ts'
 import { Card, DateNav, Empty, SaleStatus, Table, useApp } from '../ui.tsx'
 
 export function Home() {
   const { s } = useApp()
   const [date, setDate] = useState(today)
-  const rows = withCalc(s, s.sales.filter((x) => x.date === date && x.status !== 'rejected'))
+  const rows = withCalc(s, s.sales.filter((x) => x.date === date && x.status !== 'rejected' && !isCancelled(s, x)))
   const sum = (f: (r: (typeof rows)[number]) => number) => rows.reduce((a, r) => a + f(r), 0)
   const revenue = sum((r) => r.c.revenue)
   const byCat = (cat: string) => sum((r) => (r.x.cat === cat ? r.c.revenue : 0))
   const pendingDay = rows.filter((r) => r.x.status === 'pending').length
   const pendingAll = s.sales.filter((x) => x.status === 'pending').length
   const max = Math.max(byCat('water'), byCat('bag'), 1)
-  const [from, to] = periodRange(periodOf(date, s.settings.cutoffDay), s.settings.cutoffDay)
+  const [from, to] = periodRange(periodOf(date))
 
   return (
     <>

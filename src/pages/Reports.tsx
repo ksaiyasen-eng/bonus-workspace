@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ROLES, fmtDate, kip, num, periodOf, periodRange, today, type Cat, type Role, type Sale } from '../rules.ts'
-import { CAT_LABEL, uid, withCalc } from '../store.ts'
+import { CAT_LABEL, isCancelled, uid, withCalc } from '../store.ts'
 import { Card, Empty, Field, RowActions, SaleStatus, Status, Table, Wait, useApp } from '../ui.tsx'
 import { ROLE_LABEL } from './Sale.tsx'
 import { Claims } from './Claims.tsx'
@@ -9,11 +9,10 @@ const TABS = [['water', 'ນ້ຳແພັກ'], ['bag', 'ຖົງຂີ້ເ
 
 export function Reports({ tab = 'water' }: { tab?: string }) {
   const { s } = useApp()
-  const cut = s.settings.cutoffDay
-  const now = periodOf(today(), cut)
+  const now = periodOf(today())
   const [ym, setYm] = useState(now)
-  const [from, to] = periodRange(ym, cut)
-  // the current period, the next one and 12 back
+  const [from, to] = periodRange(ym)
+  // next month, this month and 12 back
   const periods = Array.from({ length: 14 }, (_, i) => {
     const [y, m] = now.split('-').map(Number)
     return new Date(Date.UTC(y, m - i, 1)).toISOString().slice(0, 7)
@@ -27,12 +26,12 @@ export function Reports({ tab = 'water' }: { tab?: string }) {
   return (
     <>
       <div className="row">
-        <Field label="ຮອບຕັດຍອດ">
+        <Field label="ຮອບເດືອນ">
           <select value={ym} onChange={(e) => setYm(e.target.value)} style={{ minWidth: 240 }}>
-            {periods.map((p) => { const [a, b] = periodRange(p, cut); return <option key={p} value={p}>{fmtDate(a)} – {fmtDate(b)}</option> })}
+            {periods.map((p) => { const [a, b] = periodRange(p); return <option key={p} value={p}>{fmtDate(a)} – {fmtDate(b)}</option> })}
           </select>
         </Field>
-        <p className="muted">ຕັດຍອດວັນທີ {cut} · ຈ່າຍທ້າຍເດືອນ · ບໍ່ນັບລາຍການລໍຖ້າອະນຸມັດ ແລະ ຖືກປະຕິເສດ</p>
+        <p className="muted">ຮອບເດືອນ ວັນທີ 1 ຫາທ້າຍເດືອນ · ບໍ່ນັບລາຍການລໍຖ້າອະນຸມັດ ຖືກປະຕິເສດ ແລະ ບິນຍົກເລີກ</p>
       </div>
       <nav className="tabs" aria-label="ພາກສ່ວນລາຍງານ">
         {TABS.map(([id, label]) => (
@@ -52,7 +51,7 @@ export function Reports({ tab = 'water' }: { tab?: string }) {
 function CatReport({ cat, from, to }: { cat: Cat; from: string; to: string }) {
   const { s } = useApp()
   const inRange = (d: string) => d >= from && d <= to
-  const rows = withCalc(s, s.sales.filter((x) => x.cat === cat && x.status === 'approved' && inRange(x.date)))
+  const rows = withCalc(s, s.sales.filter((x) => x.cat === cat && x.status === 'approved' && !isCancelled(s, x) && inRange(x.date)))
   const products = s.products.filter((p) => p.cat === cat)
   const agg = (list: typeof rows) => ({
     qty: list.reduce((a, r) => a + r.x.qty, 0),
@@ -60,11 +59,9 @@ function CatReport({ cat, from, to }: { cat: Cat; from: string; to: string }) {
     cost: list.reduce((a, r) => a + r.c.cost, 0),
     fuel: list.reduce((a, r) => a + r.c.fuel, 0),
     staff: list.reduce((a, r) => a + r.c.staffTotal, 0),
-    company: list.reduce((a, r) => a + (r.c.company ?? 0), 0),
-    off: list.filter((r) => r.c.company === null).length, // bills priced off the tier: company share waits for the rule
+    company: list.reduce((a, r) => a + r.c.company, 0),
   })
   const total = agg(rows)
-  const company = (a: ReturnType<typeof agg>) => <>{kip(a.company)}{a.off > 0 && <> <Wait why={`${a.off} ບິນ`} /></>}</>
   const damageCost = s.moves.reduce((a, m) => {
     const p = products.find((p) => p.id === m.productId)
     return a + (p && m.type === 'damage' && inRange(m.date) ? m.qty * p.cost : 0)
@@ -88,22 +85,22 @@ function CatReport({ cat, from, to }: { cat: Cat; from: string; to: string }) {
           {products.map((p) => {
             const a = agg(rows.filter((r) => r.p.id === p.id))
             return a.qty === 0 ? null : (
-              <tr key={p.id}><td>{p.name}</td><td className="n">{num(a.qty)}</td><td className="n">{kip(a.revenue)}</td><td className="n">{kip(a.cost)}</td><td className="n">{kip(a.fuel)}</td><td className="n">{kip(a.staff)}</td><td className="n">{company(a)}</td></tr>
+              <tr key={p.id}><td>{p.name}</td><td className="n">{num(a.qty)}</td><td className="n">{kip(a.revenue)}</td><td className="n">{kip(a.cost)}</td><td className="n">{kip(a.fuel)}</td><td className="n">{kip(a.staff)}</td><td className="n">{kip(a.company)}</td></tr>
             )
           })}
-          <tr className="total"><td>ລວມ</td><td className="n">{num(total.qty)}</td><td className="n">{kip(total.revenue)}</td><td className="n">{kip(total.cost)}</td><td className="n">{kip(total.fuel)}</td><td className="n">{kip(total.staff)}</td><td className="n">{company(total)}</td></tr>
+          <tr className="total"><td>ລວມ</td><td className="n">{num(total.qty)}</td><td className="n">{kip(total.revenue)}</td><td className="n">{kip(total.cost)}</td><td className="n">{kip(total.fuel)}</td><td className="n">{kip(total.staff)}</td><td className="n">{kip(total.company)}</td></tr>
         </Table>
-        {total.off > 0 && <p className="muted" style={{ marginTop: 8 }}>{total.off} ບິນຂາຍໃນລາຄາຕ່າງຈາກລາຄາຕາມຂັ້ນ ສ່ວນບໍລິສັດຂອງບິນເຫຼົ່ານີ້ລໍຖ້າຢືນຢັນກະຕິກາ ຈຶ່ງຍັງບໍ່ນັບລວມ</p>}
+        <p className="muted" style={{ marginTop: 8 }}>ສ່ວນບໍລິສັດ = ລາຍຮັບ − ຕົ້ນທຶນ − ຄ່ານ້ຳມັນ − ສ່ວນພະນັກງານ ລວມບິນທີ່ຂາຍລາຄາຕ່າງຈາກລາຄາຕາມຂັ້ນ</p>
       </Card>
       <div className="cols">
         <Card title="ສະຫຼຸບ">
           <dl className="kv">
             {cat === 'water' && <><dt>ຍອດສົ່ງສຳນັກງານໃຫຍ່ (ລາຄາທຶນ)</dt><dd>{kip(total.cost)}</dd></>}
-            <dt>ສ່ວນບໍລິສັດຈາກການຂາຍ</dt><dd>{company(total)}</dd>
+            <dt>ສ່ວນບໍລິສັດຈາກການຂາຍ</dt><dd>{kip(total.company)}</dd>
             {cat === 'water' ? (
               <><dt>ຕົ້ນທຶນຂອງເສຍທີ່ບໍ່ໄດ້ເຄລມ</dt><dd><Wait why="ວິທີແຍກຂອງເຄລມ" /></dd><dt>ກຳໄລສຸດທິ</dt><dd><Wait /></dd></>
             ) : (
-              <><dt>ຕົ້ນທຶນຂອງເສຍ</dt><dd>{kip(damageCost)}</dd><dt>ກຳໄລສຸດທິ</dt><dd>{total.off > 0 ? <Wait /> : kip(total.company - damageCost)}</dd></>
+              <><dt>ຕົ້ນທຶນຂອງເສຍ</dt><dd>{kip(damageCost)}</dd><dt>ກຳໄລສຸດທິ</dt><dd>{kip(total.company - damageCost)}</dd></>
             )}
           </dl>
         </Card>
@@ -168,7 +165,7 @@ function Bills({ from, to }: { from: string; to: string }) {
   const [tried, setTried] = useState(false)
   const list = s.sales.filter((x) => x.date >= from && x.date <= to).sort((a, b) => a.billNo.localeCompare(b.billNo, undefined, { numeric: true }))
   const dup = (x: Sale) => list.filter((y) => y.billNo === x.billNo && y.cat === x.cat).length > 1
-  const cancelled = (x: Sale) => s.cancels.some((c) => c.billNo === x.billNo && (!c.cat || c.cat === x.cat))
+  const cancelled = (x: Sale) => isCancelled(s, x)
   const dups = list.filter(dup).length
 
   // checked on every render, shown after the first save attempt, so a message goes away once fixed
@@ -206,7 +203,7 @@ function Bills({ from, to }: { from: string; to: string }) {
         )}
       </Card>
       <Card title="ບັນທຶກບິນຍົກເລີກ">
-        <p className="note" style={{ marginBottom: 12 }}>ບັນທຶກໄວ້ເພື່ອກວດສອບ ຜົນຕໍ່ຍອດຂາຍ ແລະ ຄ່າຕອບແທນລໍຖ້າຢືນຢັນກະຕິກາ ຈຶ່ງຍັງບໍ່ປ່ຽນຕົວເລກໃນລາຍງານ</p>
+        <p className="note" style={{ marginBottom: 12 }}>ບິນທີ່ບັນທຶກຍົກເລີກ ບໍ່ນັບເຂົ້າຍອດຂາຍ ຄ່າຕອບແທນ ແລະ ສະຕັອກ (ສິນຄ້າກັບຄືນສະຕັອກ) ແຕ່ຍັງສະແດງໃນລາຍການກວດເລກທີບິນ</p>
         {!manager && <p className="note" style={{ marginBottom: 12 }}>ການບັນທຶກ ແລະ ລຶບບິນຍົກເລີກ ເຮັດໄດ້ສະເພາະຜູ້ຈັດການ</p>}
         <fieldset className="gate" disabled={!manager}>
         <form className="form" data-ui="content" onSubmit={submit} noValidate>

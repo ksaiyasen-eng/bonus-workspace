@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { emptyState, exportJson, load, brokenCopy, parseBackup, type State } from './store.ts'
+import { emptyState, exportJson, isCancelled, load, brokenCopy, parseBackup, type State } from './store.ts'
 
 const good = (): State => ({
   ...emptyState(),
@@ -70,4 +70,13 @@ test('a claim for an unknown person or with no amount is refused', () => {
   assert.ok('error' in backup((s) => { s.claims = [{ ...c, staffId: 'gone' }] }))
   assert.ok('error' in backup((s) => { s.claims = [{ ...c, amount: 0 }] }))
   assert.ok('error' in backup((s) => { s.claims = [c, { ...c }] }))
+})
+
+test('a cancelled bill matches by bill number and category; an old cancel without category matches both', () => {
+  const s = emptyState()
+  const bill = { billNo: 'A1', cat: 'water' } as State['sales'][number]
+  assert.equal(isCancelled(s, bill), false)
+  assert.equal(isCancelled({ ...s, cancels: [{ id: 'c', billNo: 'A1', date: '2026-11-26', cat: 'bag' }] }, bill), false)
+  assert.equal(isCancelled({ ...s, cancels: [{ id: 'c', billNo: 'A1', date: '2026-11-26', cat: 'water' }] }, bill), true)
+  assert.equal(isCancelled({ ...s, cancels: [{ id: 'c', billNo: 'A1', date: '2026-11-26' }] }, bill), true)
 })

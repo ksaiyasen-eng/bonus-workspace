@@ -24,7 +24,7 @@ export interface Settings {
   fuel: number // kip per pack
   tier2From: number
   tier3From: number
-  cutoffDay: number
+  cutoffDay: number // shortcut: unused since calendar-month periods were confirmed, kept so stored data still passes the server check; drop with the next server deploy
   approver: string
   approvalOn: boolean
 }
@@ -99,7 +99,7 @@ export function splitBase(filled: Record<Role, boolean>, s: Settings): Record<Ro
   for (const r of ROLES) {
     const amount = (s.base * s.pct[r]) / 100
     if (filled[r]) out[r] += amount
-    // Not confirmed yet: where the share goes when transport itself is empty. It goes to the company here.
+    // confirmed 2026-11-26: when transport itself is empty, every empty share goes to the company
     else if (s.emptyRole === 'transport' && filled.transport) out.transport += amount
     else out.company += amount
   }
@@ -113,7 +113,7 @@ export interface SaleCalc {
   staff: Record<Role, number>
   staffTotal: number
   atTier: boolean
-  company: number | null // null = waiting for the rule (price differs from the tier price)
+  company: number // confirmed 2026-11-26: the company keeps all that is left, also when the price differs from the tier price
 }
 
 // shortcut: uses today's cost and settings for old bills too, snapshot them on the bill once that rule is confirmed
@@ -125,7 +125,7 @@ export function saleCalc(x: Sale, p: Product, s: Settings): SaleCalc {
   const cost = x.qty * p.cost
   const fuel = x.qty * s.fuel
   const atTier = x.price === tierPrice(p, x.qty, s)
-  return { revenue, cost, fuel, staff, staffTotal, atTier, company: atTier ? revenue - cost - fuel - staffTotal : null }
+  return { revenue, cost, fuel, staff, staffTotal, atTier, company: revenue - cost - fuel - staffTotal }
 }
 
 // ---- dates (business dates are YYYY-MM-DD strings) ----
@@ -138,15 +138,12 @@ export const shiftDate = (d: string, n: number) => {
   return iso(y, m - 1, day + n)
 }
 
-/** Period named by the month it closes in: the day after last month's cutoff up to this month's cutoff. Not confirmed yet. */
-export function periodRange(ym: string, cutoff: number): [string, string] {
+/** Pay period = calendar month, first to last day (confirmed 2026-11-26). */
+export function periodRange(ym: string): [string, string] {
   const [y, m] = ym.split('-').map(Number)
-  return [iso(y, m - 2, cutoff + 1), iso(y, m - 1, cutoff)]
+  return [`${ym}-01`, iso(y, m, 0)]
 }
-export function periodOf(date: string, cutoff: number): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return iso(y, d > cutoff ? m : m - 1, 1).slice(0, 7)
-}
+export const periodOf = (date: string) => date.slice(0, 7)
 
 export const num = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 export const kip = (n: number) => `${num(n)} ກີບ`

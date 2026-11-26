@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { ROLES, fmtDate, kip, today } from '../rules.ts'
-import { nameOf, uid, withCalc, type Claim } from '../store.ts'
+import { isCancelled, nameOf, uid, withCalc, type Claim } from '../store.ts'
 import { Card, Empty, Field, RowActions, Status, Table, focusForm, useApp } from '../ui.tsx'
 
 // Confirmed by the user 2026-11-25:
@@ -19,7 +19,7 @@ export function Claims({ ym, from, to }: { ym: string; from: string; to: string 
   const [tried, setTried] = useState(false)
 
   // commission each person earned from approved bills in this period, both categories together
-  const approved = withCalc(s, s.sales.filter((x) => x.status === 'approved' && x.date >= from && x.date <= to))
+  const approved = withCalc(s, s.sales.filter((x) => x.status === 'approved' && !isCancelled(s, x) && x.date >= from && x.date <= to))
   const earned = (id: string) => approved.reduce((a, { x, c }) => a + ROLES.reduce((b, r) => b + (x.staff[r] === id ? c.staff[r] : 0), 0), 0)
   const claims = s.claims.filter((c) => c.ym === ym)
   const sum = (id: string, status: Claim['status']) => claims.reduce((a, c) => a + (c.staffId === id && c.status === status ? c.amount : 0), 0)

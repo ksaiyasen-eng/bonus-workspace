@@ -278,7 +278,7 @@ function Shell({ s, set, role, remote, changePin, foot, banner }: {
             <button className="menu-btn" aria-label="ເປີດເມນູ" aria-expanded={menu} onClick={() => setMenu(true)}><Icon name="menu" /></button>
             <h1>{current[1]}</h1>
             <div className="top-meta">
-              <span>ຕັດຍອດວັນທີ {s.settings.cutoffDay}</span>
+              <span>ຮອບເດືອນ 1 – ທ້າຍເດືອນ</span>
               <span>ສະກຸນເງິນ ກີບ</span>
               <b>Bonus Workspace</b>
             </div>
